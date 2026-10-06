@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, type Appointment, type Availability, type Bay, type Dealer, type ServiceTypeInfo, type Slot, type VehicleType } from '../api';
+import { api, ApiError, type Appointment, type Availability, type Bay, type Dealer, type ServiceTypeInfo, type Slot, type VehicleType } from '../api';
 import { VehicleIcon } from '../components/Icons';
-import { BOOKING_DAYS_AHEAD } from '../constants';
+import { API_ERROR_CODES, BOOKING_DAYS_AHEAD } from '../constants';
 import { dayLabel, humanize, isoDate, nextDays, time12, timeOf } from '../format';
 
 const emptyForm = { customerName: '', customerPhone: '', vehicleNumber: '', vehicleMake: '', vehicleModel: '', notes: '' };
@@ -38,8 +38,10 @@ export function BookPage({ dealer }: { dealer: Dealer }) {
     api.availability(dealer.id, vehicle, service, date).then(setAvailability).catch((e) => setError(e.message));
   }, [dealer.id, vehicle, service, date, catalog, reload]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const update = (field: keyof typeof emptyForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+  const update = (field: keyof typeof emptyForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm({ ...form, [field]: e.target.value });
+    setError(null); // the user is fixing the problem, so don't keep showing the old message
+  };
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,8 +57,14 @@ export function BookPage({ dealer }: { dealer: Dealer }) {
       }, idempotencyKey);
       setBooked(appointment);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setReload((r) => r + 1); // someone may have taken the slot: refresh the grid
+      if (err instanceof ApiError && err.code === API_ERROR_CODES.SLOT_UNAVAILABLE) {
+        // Someone took the last bay: refresh the grid, which clears the selection, and say so.
+        setError(`${err.message}. Please pick another time.`);
+        setReload((r) => r + 1);
+      } else {
+        // Validation and other errors keep the chosen slot, so the user can fix the field and resubmit.
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
       setSubmitting(false);
     }

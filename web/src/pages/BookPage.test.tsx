@@ -80,8 +80,32 @@ describe('BookPage', () => {
     await user.click(await screen.findByRole('button', { name: /10:00 AM/ }));
     await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
 
-    expect(await screen.findByText('No BIKE bay is free at 10:00')).toBeInTheDocument();
+    expect(await screen.findByText('No BIKE bay is free at 10:00. Please pick another time.')).toBeInTheDocument();
     await waitFor(() => expect(mocked.availability.mock.calls.length).toBeGreaterThanOrEqual(2));
+  });
+
+  it('keeps the chosen slot after a validation error so the user can fix the field and resubmit', async () => {
+    mocked.book
+      .mockRejectedValueOnce(new ApiError('Mobile must be 10-15 digits, optionally prefixed with +', 400, 'VALIDATION_FAILED'))
+      .mockResolvedValueOnce(appointment);
+    render(<BookPage dealer={dealer} />);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Name'), 'Test Rider');
+    await user.type(screen.getByLabelText('Mobile'), '98450');
+    await user.type(screen.getByLabelText('Registration number'), 'KA05TR4242');
+    await user.click(await screen.findByRole('button', { name: /10:00 AM/ }));
+    await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    expect(await screen.findByText(/must be 10-15 digits/)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Mobile'), '11111');
+
+    expect(screen.queryByText(/must be 10-15 digits/)).not.toBeInTheDocument();
+    expect(mocked.availability).toHaveBeenCalledTimes(1); // grid not reloaded, so the slot is still selected
+    const confirm = screen.getByRole('button', { name: 'Confirm booking' });
+    expect(confirm).toBeEnabled();
+    await user.click(confirm);
+    expect(await screen.findByText("You're booked in!")).toBeInTheDocument();
+    expect(mocked.book.mock.calls[1][0].customerPhone).toBe('9845011111');
   });
 
   it('keeps the confirm button disabled until a slot is picked', async () => {
