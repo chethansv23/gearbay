@@ -13,10 +13,24 @@ export async function startPostgres(migrationsDir, { maxConnections = 10 } = {})
   return {
     pool,
     async stop() {
-      await pool.end();
+      // pool.end() resolves once every connection has been asked to close, not once they have closed.
+      // Stopping Postgres in that window kills the open connections, and each one raises an unhandled
+      // 57P01 (admin_shutdown) that fails the run even though every test passed. So wait for them all.
+      await closeAllConnections(pool);
       await container.stop();
     },
   };
+}
+
+/** Ends the pool and resolves only when every connection has really closed (the pool emits `remove` for each). */
+async function closeAllConnections(pool) {
+  let open = pool.totalCount;
+  const closed = new Promise((resolve) => {
+    if (open === 0) resolve();
+    pool.on('remove', () => { if (--open === 0) resolve(); });
+  });
+  await pool.end();
+  await closed;
 }
 
 export const silentLogger = { info() {}, warn() {}, error() {}, debug() {} };

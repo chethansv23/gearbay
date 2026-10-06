@@ -56,9 +56,9 @@ Ports are offset from Torqline (3000 / 8080 / 5433 …) so both projects can run
 ## Tests
 
 ```bash
-make test-unit      # 30 unit tests, no Docker needed
-make test-backend   # + 18 integration tests against real Postgres (Testcontainers)
-make test-web       # 29 UI tests
+make test-unit      # 39 unit tests, no Docker needed
+make test-backend   # + 22 integration tests against real Postgres (Testcontainers)
+make test-web       # 37 UI tests
 make loadtest       # k6 race and throughput, with pass/fail thresholds
 ```
 
