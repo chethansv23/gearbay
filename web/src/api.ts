@@ -1,4 +1,4 @@
-import { API_BASE_URL, IDEMPOTENCY_KEY_HEADER, NOTIFICATIONS_LIMIT } from './constants';
+import { API_BASE_URL, FIELD_LABELS, IDEMPOTENCY_KEY_HEADER, NOTIFICATIONS_LIMIT } from './constants';
 
 export type VehicleType = 'CAR' | 'BIKE';
 export type Fitment = 'CAR' | 'BIKE' | 'UNIVERSAL';
@@ -142,7 +142,9 @@ async function request<T>(path: string, init?: RequestInit & { idempotencyKey?: 
   const text = await res.text();
   const body = text ? JSON.parse(text) : undefined;
   if (!res.ok) {
-    const fieldErrors = body?.errors ? Object.entries(body.errors).map(([f, m]) => `${f} ${m}`).join(', ') : '';
+    const fieldErrors = body?.errors
+      ? Object.entries(body.errors).map(([field, message]) => `${FIELD_LABELS[field] ?? field} ${message}`).join(', ')
+      : '';
     throw new ApiError(fieldErrors || body?.detail || `Request failed (${res.status})`, res.status, body?.code);
   }
   return body as T;

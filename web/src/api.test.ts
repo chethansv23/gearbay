@@ -38,10 +38,17 @@ describe('api client', () => {
     expect(error.message).toBe('No BIKE bay is free at 10:00');
   });
 
-  it('lists field validation errors in the message', async () => {
-    mockFetch(400, { code: 'VALIDATION_FAILED', detail: 'Request validation failed', errors: { customerPhone: 'must be 10-15 digits' } });
+  it('lists field validation errors using the labels shown on screen', async () => {
+    mockFetch(400, { code: 'VALIDATION_FAILED', detail: 'Request validation failed',
+      errors: { customerPhone: 'must be 10-15 digits', vehicleNumber: 'must not be blank' } });
 
-    await expect(api.checkIn('x')).rejects.toThrow('customerPhone must be 10-15 digits');
+    await expect(api.checkIn('x')).rejects.toThrow('Mobile must be 10-15 digits, Registration number must not be blank');
+  });
+
+  it('falls back to the API field name when there is no label', async () => {
+    mockFetch(400, { code: 'VALIDATION_FAILED', errors: { 'lines[0].sku': 'must not be blank' } });
+
+    await expect(api.checkIn('x')).rejects.toThrow('lines[0].sku must not be blank');
   });
 
   it('builds query strings for availability and parts', async () => {
