@@ -1,0 +1,8 @@
+**/node_modules
+**/test
+web
+docs
+loadtest
+scripts
+coverage
+*.md

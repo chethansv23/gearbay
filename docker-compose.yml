@@ -1,0 +1,127 @@
+# Ports are offset from Torqline (the Java version) so both stacks can run side by side.
+name: gearbay
+
+x-service: &service
+  restart: unless-stopped
+  mem_limit: 256m
+  depends_on:
+    postgres: { condition: service_healthy }
+    kafka: { condition: service_healthy }
+    redis: { condition: service_healthy }
+  healthcheck: &health
+    test: ["CMD-SHELL", "wget -qO- localhost:$$PORT/health | grep -q UP"]
+    interval: 5s
+    start_period: 20s
+    retries: 12
+  environment: &service-env
+    DB_HOST: postgres
+    DB_PORT: 5432
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+    KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: gearbay
+      POSTGRES_PASSWORD: gearbay
+      POSTGRES_DB: gearbay
+    ports: ["5434:5432"]
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gearbay -d inventory_db"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6380:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.9.1
+    ports: ["9094:9094"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # kafka:29092 for containers, localhost:9094 for services started with `npm start`
+      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9094,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms256m
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:29092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  appointment:
+    <<: *service
+    build: { context: ., args: { SERVICE: appointment } }
+    image: gearbay/appointment
+    ports: ["9081:9081"]
+    environment: { <<: *service-env, PORT: 9081 }
+
+  repair-order:
+    <<: *service
+    build: { context: ., args: { SERVICE: repair-order } }
+    image: gearbay/repair-order
+    ports: ["9082:9082"]
+    environment: { <<: *service-env, PORT: 9082 }
+
+  inventory:
+    <<: *service
+    build: { context: ., args: { SERVICE: inventory } }
+    image: gearbay/inventory
+    ports: ["9083:9083"]
+    environment: { <<: *service-env, PORT: 9083 }
+
+  notification:
+    <<: *service
+    build: { context: ., args: { SERVICE: notification } }
+    image: gearbay/notification
+    ports: ["9084:9084"]
+    environment: { <<: *service-env, PORT: 9084 }
+
+  gateway:
+    build: { context: ., args: { SERVICE: gateway } }
+    image: gearbay/gateway
+    restart: unless-stopped
+    mem_limit: 128m
+    ports: ["9080:9080"]
+    healthcheck: *health
+    environment:
+      PORT: 9080
+      APPOINTMENT_SERVICE_URL: http://appointment:9081
+      REPAIR_ORDER_SERVICE_URL: http://repair-order:9082
+      INVENTORY_SERVICE_URL: http://inventory:9083
+      NOTIFICATION_SERVICE_URL: http://notification:9084
+    depends_on:
+      appointment: { condition: service_healthy }
+      repair-order: { condition: service_healthy }
+      inventory: { condition: service_healthy }
+      notification: { condition: service_healthy }
+
+  web:
+    build: ./web
+    image: gearbay/web
+    restart: unless-stopped
+    ports: ["4000:80"]
+    depends_on:
+      gateway: { condition: service_healthy }
+
+volumes:
+  pgdata:

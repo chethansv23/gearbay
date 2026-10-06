@@ -1,0 +1,22 @@
+{
+  "name": "gearbay",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Service appointments and repair orders for car and bike dealerships (Node.js)",
+  "type": "module",
+  "workspaces": ["packages/*", "services/*"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^12.2.0",
+    "@vitest/coverage-v8": "^5.0.3",
+    "supertest": "^7.3.1",
+    "testcontainers": "^12.2.0",
+    "vitest": "^5.0.3"
+  }
+}
