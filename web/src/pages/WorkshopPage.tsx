@@ -4,7 +4,7 @@ import { VehicleIcon } from '../components/Icons';
 import { InvoiceView } from '../components/InvoiceView';
 import { Modal } from '../components/Modal';
 import { BOARD_COLUMNS, BOOKING_DAYS_AHEAD, MAX_PART_QUANTITY, POLL_INTERVAL_MS, TECHNICIANS } from '../constants';
-import { dayLabel, humanize, isoDate, nextDays, rupees, timeOf } from '../format';
+import { dayLabel, humanize, humanizeList, isoDate, nextDays, rupees, timeOf } from '../format';
 import { usePolling } from '../hooks';
 
 export function WorkshopPage({ dealer }: { dealer: Dealer }) {
@@ -113,7 +113,7 @@ function AppointmentRow({ a, act }: { a: Appointment; act: (f: () => Promise<unk
         </div>
       </td>
       <td>{a.customerName}<div className="muted tiny">{a.customerPhone}</div></td>
-      <td>{humanize(a.serviceType)}</td>
+      <td>{humanizeList(a.serviceTypes)}</td>
       <td><span className={`pill pill-${a.status.toLowerCase()}`}>{humanize(a.status)}</span></td>
       <td className="actions">
         {a.status === 'BOOKED' && (
@@ -141,7 +141,7 @@ function JobCard({ o, act, onParts, onInvoice }: {
       </div>
       <strong className="mono">{o.vehicleNumber}</strong>
       <div className="muted small">{[o.vehicleMake, o.vehicleModel].filter(Boolean).join(' ') || o.customerName}</div>
-      <div className="small">{humanize(o.serviceType)}{o.odometerKm != null && <span className="muted"> · {o.odometerKm.toLocaleString('en-IN')} km</span>}</div>
+      <div className="small">{humanizeList(o.serviceTypes)}{o.odometerKm != null && <span className="muted"> · {o.odometerKm.toLocaleString('en-IN')} km</span>}</div>
       {o.technician && <div className="small">Technician <strong>{o.technician}</strong></div>}
 
       {o.parts.length > 0 && (

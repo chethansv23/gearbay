@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { completedOrder, dealer } from '../test/fixtures';
+import { completedOrder, dealer, repairOrder } from '../test/fixtures';
 import { InvoiceView } from './InvoiceView';
 
 describe('InvoiceView', () => {
@@ -22,5 +22,21 @@ describe('InvoiceView', () => {
     const body = screen.getAllByRole('rowgroup')[1];
     expect(within(body).getAllByRole('row')).toHaveLength(3); // labour + 2 reserved parts
     expect(screen.queryByText(/CHAIN-KIT/)).not.toBeInTheDocument();
+  });
+
+  it('shows one labour line per booked service', () => {
+    const combined = repairOrder({
+      status: 'COMPLETED', serviceTypes: ['GENERAL_SERVICE', 'BRAKE_SERVICE'],
+      labourLines: [
+        { serviceType: 'GENERAL_SERVICE', minutes: 60, amount: 400 },
+        { serviceType: 'BRAKE_SERVICE', minutes: 60, amount: 400 },
+      ],
+      labourAmount: 800, partsAmount: 0, taxAmount: 144, totalAmount: 944,
+    });
+    render(<InvoiceView order={combined} dealer={dealer} />);
+
+    expect(screen.getByText(/Labour: General service/)).toBeInTheDocument();
+    expect(screen.getByText(/Labour: Brake service/)).toBeInTheDocument();
+    expect(screen.getByText('Total').nextElementSibling).toHaveTextContent('₹944.00');
   });
 });

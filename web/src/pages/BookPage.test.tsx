@@ -40,13 +40,62 @@ describe('BookPage', () => {
     const user = userEvent.setup();
     render(<BookPage dealer={dealer} />);
 
-    expect(await screen.findByRole('button', { name: /Chain sprocket/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Wheel alignment/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole('checkbox', { name: /Chain sprocket/ })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Wheel alignment/ })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Car/ }));
 
-    expect(await screen.findByRole('button', { name: /Wheel alignment/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Chain sprocket/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole('checkbox', { name: /Wheel alignment/ })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Chain sprocket/ })).not.toBeInTheDocument();
+  });
+
+  it('lets the customer combine services and shows the total time', async () => {
+    const user = userEvent.setup();
+    render(<BookPage dealer={dealer} />);
+
+    await user.click(await screen.findByRole('checkbox', { name: /Brake service/ }));
+
+    expect(screen.getByRole('checkbox', { name: /General service/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('checkbox', { name: /Brake service/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText(/2 selected · 2 h in total/)).toBeInTheDocument();
+    expect(screen.getByText('General service + Brake service')).toBeInTheDocument();
+    await waitFor(() => expect(mocked.availability).toHaveBeenLastCalledWith(
+      dealer.id, 'BIKE', ['GENERAL_SERVICE', 'BRAKE_SERVICE'], expect.any(String)));
+  });
+
+  it('keeps at least one service selected', async () => {
+    const user = userEvent.setup();
+    render(<BookPage dealer={dealer} />);
+
+    const general = await screen.findByRole('checkbox', { name: /General service/ });
+    await user.click(general);
+
+    expect(general).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('drops services that do not fit when switching vehicle', async () => {
+    const user = userEvent.setup();
+    render(<BookPage dealer={dealer} />);
+    await user.click(await screen.findByRole('checkbox', { name: /Chain sprocket/ }));
+
+    await user.click(screen.getByRole('button', { name: /Car/ }));
+
+    expect(await screen.findByText(/1 selected/)).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /General service/ })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('books all selected services together', async () => {
+    mocked.book.mockResolvedValue({ ...appointment, serviceTypes: ['GENERAL_SERVICE', 'BRAKE_SERVICE'] });
+    render(<BookPage dealer={dealer} />);
+    const user = await fillDetails();
+    await user.click(await screen.findByRole('checkbox', { name: /Brake service/ }));
+
+    await user.click(await screen.findByRole('button', { name: /10:00 AM/ }));
+    await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
+
+    expect(await screen.findByText("You're booked in!")).toBeInTheDocument();
+    expect(mocked.book.mock.calls[0][0].serviceTypes).toEqual(['GENERAL_SERVICE', 'BRAKE_SERVICE']);
+    expect(screen.getByText('Services')).toBeInTheDocument();
   });
 
   it('disables full slots and shows free bays for the rest', async () => {
@@ -67,7 +116,7 @@ describe('BookPage', () => {
     expect(await screen.findByText("You're booked in!")).toBeInTheDocument();
     expect(screen.getByText('Gearbay Indiranagar, Bike Stand 1')).toBeInTheDocument();
     const [request, key] = mocked.book.mock.calls[0];
-    expect(request).toMatchObject({ vehicleType: 'BIKE', serviceType: 'GENERAL_SERVICE', customerPhone: '9845011111' });
+    expect(request).toMatchObject({ vehicleType: 'BIKE', serviceTypes: ['GENERAL_SERVICE'], customerPhone: '9845011111' });
     expect(request.slotStart).toMatch(/T10:00$/);
     expect(key).toMatch(/^[0-9a-f-]{36}$/);
   });
@@ -110,7 +159,7 @@ describe('BookPage', () => {
 
   it('keeps the confirm button disabled until a slot is picked', async () => {
     render(<BookPage dealer={dealer} />);
-    await screen.findByRole('button', { name: /Chain sprocket/ });
+    await screen.findByRole('checkbox', { name: /Chain sprocket/ });
 
     expect(screen.getByRole('button', { name: 'Confirm booking' })).toBeDisabled();
   });

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { SERVICE_TYPES, VehicleType } from '../src/constants/index.js';
-import { durationMinutes, labourPaise, serviceCatalogue, supports } from '../src/domain.js';
+import {
+  durationMinutes, labourLines, labourPaise, serviceCatalogue, supports, totalDurationMinutes, totalLabourPaise,
+  uniqueServices, unsupportedServices,
+} from '../src/domain.js';
 
 describe('domain', () => {
   it('gives bikes shorter jobs than cars', () => {
@@ -30,5 +33,30 @@ describe('domain', () => {
   it('lists only the vehicle types a job applies to', () => {
     const chain = serviceCatalogue().find((s) => s.code === 'CHAIN_SPROCKET');
     expect(chain.durationMinutes).toEqual({ BIKE: 60 });
+  });
+
+  describe('several services in one booking', () => {
+    const generalPlusBrakes = ['GENERAL_SERVICE', 'BRAKE_SERVICE'];
+
+    it('adds up the durations, since the services run back to back on one bay', () => {
+      expect(totalDurationMinutes(generalPlusBrakes, 'BIKE')).toBe(120); // 60 + 60
+      expect(totalDurationMinutes(generalPlusBrakes, 'CAR')).toBe(210); // 120 + 90
+    });
+
+    it('charges labour per service', () => {
+      expect(labourLines(generalPlusBrakes, 'CAR')).toEqual([
+        { serviceType: 'GENERAL_SERVICE', minutes: 120, labourPaise: 160_000 },
+        { serviceType: 'BRAKE_SERVICE', minutes: 90, labourPaise: 120_000 },
+      ]);
+      expect(totalLabourPaise(generalPlusBrakes, 'CAR')).toBe(280_000);
+    });
+
+    it('names the services that do not fit the vehicle', () => {
+      expect(unsupportedServices(['GENERAL_SERVICE', 'WHEEL_ALIGNMENT', 'AC_SERVICE'], 'BIKE')).toEqual(['WHEEL_ALIGNMENT', 'AC_SERVICE']);
+    });
+
+    it('drops repeats but keeps the chosen order', () => {
+      expect(uniqueServices(['BRAKE_SERVICE', 'OIL_CHANGE', 'BRAKE_SERVICE'])).toEqual(['BRAKE_SERVICE', 'OIL_CHANGE']);
+    });
   });
 });

@@ -15,7 +15,7 @@ export function appointmentView(row, zone) {
     vehicleNumber: row.vehicle_number,
     vehicleMake: row.vehicle_make,
     vehicleModel: row.vehicle_model,
-    serviceType: row.service_type,
+    serviceTypes: row.service_types,
     localStart: local(row.slot_start, zone),
     localEnd: local(row.slot_end, zone),
     slotStart: row.slot_start.toISOString(),

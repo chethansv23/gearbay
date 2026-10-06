@@ -6,8 +6,15 @@ describe('templates', () => {
   it('shows the booking time in IST', () => {
     expect(templates.booked({
       appointmentId: '0a1b2c3d-0000-0000-0000-000000000000', customerName: 'Asha', vehicleType: 'BIKE',
-      vehicleNumber: 'KA03HB1234', serviceType: 'CHAIN_SPROCKET', slotStart: '2030-01-07T04:30:00Z',
+      vehicleNumber: 'KA03HB1234', serviceTypes: ['CHAIN_SPROCKET'], slotStart: '2030-01-07T04:30:00Z',
     })).toBe('Hi Asha, your bike KA03HB1234 for chain sprocket is confirmed for Mon 7 Jan, 10:00 AM. Ref 0A1B2C3D.');
+  });
+
+  it('lists every booked service', () => {
+    expect(templates.booked({
+      appointmentId: '0a1b2c3d-0000-0000-0000-000000000000', customerName: 'Asha', vehicleType: 'BIKE',
+      vehicleNumber: 'KA03HB1234', serviceTypes: ['GENERAL_SERVICE', 'BRAKE_SERVICE'], slotStart: '2030-01-07T04:30:00Z',
+    })).toContain('for general service + brake service is confirmed');
   });
 
   it('includes the invoice total on completion', () => {

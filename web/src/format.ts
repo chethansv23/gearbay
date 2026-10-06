@@ -4,6 +4,16 @@ export const rupees = (n?: number) =>
 export const humanize = (code: string) =>
   (code.charAt(0) + code.slice(1).toLowerCase().replaceAll('_', ' ')).replace(/^Ac /, 'AC ');
 
+/** ['GENERAL_SERVICE', 'BRAKE_SERVICE'] -> "General service + Brake service" */
+export const humanizeList = (codes: string[]) => codes.map(humanize).join(' + ');
+
+/** 150 -> "2 h 30 min", 60 -> "1 h", 30 -> "30 min" */
+export function duration(minutes: number) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return [h && `${h} h`, m && `${m} min`].filter(Boolean).join(' ') || '0 min';
+}
+
 /** "09:00:00" -> "9:00 AM" */
 export function time12(t: string) {
   const [h, m] = t.split(':').map(Number);

@@ -19,3 +19,9 @@ export const POLL_INTERVAL_MS = {
   inventory: 3000,
   partsPicker: 5000,
 } as const;
+
+/** Most services a customer can combine into one booking; must match MAX_SERVICES_PER_BOOKING on the server. */
+export const MAX_SERVICES_PER_BOOKING = 5;
+
+/** Selected when the booking page opens. */
+export const DEFAULT_SERVICE = 'GENERAL_SERVICE';

@@ -43,12 +43,12 @@ export async function findForDay(db, dealerId, from, to) {
 export async function insertAppointment(db, a) {
   const { rows } = await db.query(
     `insert into appointment (id, dealer_id, bay_id, customer_name, customer_phone, customer_email, vehicle_type,
-       vehicle_number, vehicle_make, vehicle_model, service_type, slot_start, slot_end, status, idempotency_key,
+       vehicle_number, vehicle_make, vehicle_model, service_types, slot_start, slot_end, status, idempotency_key,
        notes, created_at, updated_at, version)
      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, now(), now(), 0)
      returning *`,
     [a.id, a.dealerId, a.bayId, a.customerName, a.customerPhone, a.customerEmail, a.vehicleType, a.vehicleNumber,
-      a.vehicleMake, a.vehicleModel, a.serviceType, a.slotStart, a.slotEnd, a.status, a.idempotencyKey, a.notes]);
+      a.vehicleMake, a.vehicleModel, a.serviceTypes, a.slotStart, a.slotEnd, a.status, a.idempotencyKey, a.notes]);
   return rows[0];
 }
 

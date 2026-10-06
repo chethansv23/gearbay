@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
-  AggregateTypes, ApiError, EventTypes, SqlStates, Topics, appendOutbox, durationMinutes, hasSqlState, supports,
+  AggregateTypes, ApiError, EventTypes, SqlStates, Topics, appendOutbox, hasSqlState, totalDurationMinutes, unsupportedServices,
   withTransaction,
 } from '@gearbay/common';
 import { DateTime } from 'luxon';
@@ -28,11 +28,14 @@ export function createAppointmentService({ pool, cache, logger, clock = () => ne
     return cache.get(d.id, date, () => repo.findBusyIntervals(pool, d.id, ...dayBounds(date, d.timezone)));
   }
 
-  function jobMinutes(serviceType, vehicleType) {
-    if (!supports(serviceType, vehicleType)) {
-      throw ApiError.badRequest(AppointmentErrorCodes.SERVICE_NOT_OFFERED, `${serviceType} is not offered for a ${vehicleType}`);
+  /** Total bay time for the selected services; all of them must apply to the vehicle. */
+  function jobMinutes(serviceTypes, vehicleType) {
+    const unsupported = unsupportedServices(serviceTypes, vehicleType);
+    if (unsupported.length > 0) {
+      throw ApiError.badRequest(AppointmentErrorCodes.SERVICE_NOT_OFFERED,
+        `${unsupported.join(', ')} ${unsupported.length === 1 ? 'is' : 'are'} not offered for a ${vehicleType}`);
     }
-    return durationMinutes(serviceType, vehicleType);
+    return totalDurationMinutes(serviceTypes, vehicleType);
   }
 
   function validateSlot(d, slotStart, minutes) {
@@ -74,7 +77,7 @@ export function createAppointmentService({ pool, cache, logger, clock = () => ne
         vehicleNumber: request.vehicleNumber.replaceAll(' ', '').toUpperCase(),
         vehicleMake: request.vehicleMake ?? null,
         vehicleModel: request.vehicleModel ?? null,
-        serviceType: request.serviceType,
+        serviceTypes: request.serviceTypes,
         slotStart: slot.start,
         slotEnd: slot.end,
         status: AppointmentStatus.BOOKED,
@@ -87,7 +90,7 @@ export function createAppointmentService({ pool, cache, logger, clock = () => ne
         payload: {
           appointmentId: row.id, dealerId: row.dealer_id, customerName: row.customer_name,
           customerPhone: row.customer_phone, vehicleType: row.vehicle_type, vehicleNumber: row.vehicle_number,
-          serviceType: row.service_type, slotStart: row.slot_start, slotEnd: row.slot_end,
+          serviceTypes: row.service_types, slotStart: row.slot_start, slotEnd: row.slot_end,
         },
       });
       return row;
@@ -117,15 +120,15 @@ export function createAppointmentService({ pool, cache, logger, clock = () => ne
   }
 
   return {
-    async availability({ dealerId, vehicleType, serviceType, date }) {
-      const minutes = jobMinutes(serviceType, vehicleType);
+    async availability({ dealerId, vehicleType, serviceTypes, date }) {
+      const minutes = jobMinutes(serviceTypes, vehicleType);
       const d = await dealer(dealerId);
       const bayIds = (await repo.findBays(pool, dealerId, vehicleType)).map((b) => b.id);
       const slots = computeSlots({
         date, zone: d.timezone, openTime: d.open_time, closeTime: d.close_time, durationMinutes: minutes,
         bayIds, busy: await busyIntervals(d, date), now: clock(),
       });
-      return { dealerId, date, vehicleType, serviceType, durationMinutes: minutes, slots };
+      return { dealerId, date, vehicleType, serviceTypes, durationMinutes: minutes, slots };
     },
 
     /**
@@ -138,7 +141,7 @@ export function createAppointmentService({ pool, cache, logger, clock = () => ne
         const existing = await repo.findByIdempotencyKey(pool, idempotencyKey);
         if (existing) return replay(existing);
       }
-      const minutes = jobMinutes(request.serviceType, request.vehicleType);
+      const minutes = jobMinutes(request.serviceTypes, request.vehicleType);
       const d = await dealer(request.dealerId);
       const slot = validateSlot(d, request.slotStart, minutes);
 
@@ -167,7 +170,7 @@ export function createAppointmentService({ pool, cache, logger, clock = () => ne
         }
       }
       throw ApiError.conflict(AppointmentErrorCodes.SLOT_UNAVAILABLE,
-        `No ${request.vehicleType} bay is free at ${request.slotStart} for ${request.serviceType}`);
+        `No ${request.vehicleType} bay is free at ${request.slotStart} for ${request.serviceTypes.join(' + ')}`);
     },
 
     async get(id) {
@@ -193,7 +196,7 @@ export function createAppointmentService({ pool, cache, logger, clock = () => ne
           payload: {
             appointmentId: id, dealerId: row.dealer_id, customerName: row.customer_name, customerPhone: row.customer_phone,
             vehicleType: row.vehicle_type, vehicleNumber: row.vehicle_number, vehicleMake: row.vehicle_make,
-            vehicleModel: row.vehicle_model, serviceType: row.service_type, odometerKm: odometerKm ?? null,
+            vehicleModel: row.vehicle_model, serviceTypes: row.service_types, odometerKm: odometerKm ?? null,
           },
         });
         return updated;

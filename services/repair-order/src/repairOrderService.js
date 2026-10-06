@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
-  AggregateTypes, ApiError, EventTypes, Topics, appendOutbox, formatRupees, labourPaise, toPaise, toRupees,
+  AggregateTypes, ApiError, EventTypes, Topics, appendOutbox, formatRupees, toPaise, toRupees, totalLabourPaise,
   withTransaction,
 } from '@gearbay/common';
 import { PartLineStatus, RO_NUMBER_SEQUENCE_QUERY, RepairOrderStatus as S, roNumber } from './constants/index.js';
@@ -62,11 +62,11 @@ export function createRepairOrderService({ pool, logger }) {
       const number = roNumber(new Date().getFullYear(), seq);
       const { rows: [order] } = await client.query(
         `insert into repair_order (id, ro_number, appointment_id, dealer_id, customer_name, customer_phone, vehicle_type,
-           vehicle_number, vehicle_make, vehicle_model, service_type, odometer_km, status, labour_amount, opened_at, version)
+           vehicle_number, vehicle_make, vehicle_model, service_types, odometer_km, status, labour_amount, opened_at, version)
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, now(), 0) returning *`,
         [id, number, e.appointmentId, e.dealerId, e.customerName, e.customerPhone, e.vehicleType, e.vehicleNumber,
-          e.vehicleMake, e.vehicleModel, e.serviceType, e.odometerKm, S.OPEN,
-          formatRupees(labourPaise(e.serviceType, e.vehicleType))]);
+          e.vehicleMake, e.vehicleModel, e.serviceTypes, e.odometerKm, S.OPEN,
+          formatRupees(totalLabourPaise(e.serviceTypes, e.vehicleType))]);
       await publish(client, order, EventTypes.REPAIR_ORDER_CREATED, {
         repairOrderId: id, roNumber: number, appointmentId: e.appointmentId, dealerId: e.dealerId,
         customerName: e.customerName, customerPhone: e.customerPhone, vehicleNumber: e.vehicleNumber,

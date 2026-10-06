@@ -18,8 +18,8 @@ wait_for() { # wait_for <url> <jq-condition>
   done
   echo "Timed out waiting for $1 to satisfy $2" >&2; exit 1
 }
-first_free() { # first_free <vehicleType> <serviceType>
-  curl -fsS "$API/appointments/availability?dealerId=$DEALER&vehicleType=$1&serviceType=$2&date=$DATE" \
+first_free() { # first_free <vehicleType> <serviceTypes, comma-separated>
+  curl -fsS "$API/appointments/availability?dealerId=$DEALER&vehicleType=$1&serviceTypes=$2&date=$DATE" \
     | jq -r '[.slots[] | select(.freeBays > 0)][0].start // empty'
 }
 
@@ -30,7 +30,7 @@ step "Dealers"
 curl -fsS "$API/dealers" | jq -c '.[] | {id, name, bayCount}'
 
 step "Bike general-service availability at $DEALER on $DATE"
-curl -fsS "$API/appointments/availability?dealerId=$DEALER&vehicleType=BIKE&serviceType=GENERAL_SERVICE&date=$DATE" \
+curl -fsS "$API/appointments/availability?dealerId=$DEALER&vehicleType=BIKE&serviceTypes=GENERAL_SERVICE&date=$DATE" \
   | jq -c '{durationMinutes, slots: [.slots[:6][] | "\(.start) free=\(.freeBays)"]}'
 
 BIKE_SLOT=$(first_free BIKE GENERAL_SERVICE)
@@ -39,7 +39,7 @@ KEY=$(uuidgen)
 BOOK_BIKE=$(jq -n --arg d "$DEALER" --arg p "$PHONE" --arg s "${DATE}T${BIKE_SLOT}" '{
   dealerId: $d, customerName: "Asha Rao", customerPhone: $p, vehicleType: "BIKE",
   vehicleNumber: "KA03 HB 1234", vehicleMake: "Royal Enfield", vehicleModel: "Classic 350",
-  serviceType: "GENERAL_SERVICE", slotStart: $s }')
+  serviceTypes: ["GENERAL_SERVICE"], slotStart: $s }')
 
 step "Book the bike for $BIKE_SLOT (Idempotency-Key $KEY)"
 BIKE=$(post /appointments "$BOOK_BIKE" -H "Idempotency-Key: $KEY")
@@ -51,22 +51,22 @@ curl -sS -o /dev/null -w 'HTTP %{http_code}\n' -X POST "$API/appointments" -H 'C
   -H "Idempotency-Key: $KEY" -d "$BOOK_BIKE"
 
 step "A car-only job for a bike is rejected"
-post /appointments "$(echo "$BOOK_BIKE" | jq '.serviceType = "WHEEL_ALIGNMENT"')" 2>/dev/null \
+post /appointments "$(echo "$BOOK_BIKE" | jq '.serviceTypes = ["WHEEL_ALIGNMENT"]')" 2>/dev/null \
   || curl -sS -X POST "$API/appointments" -H 'Content-Type: application/json' \
-       -d "$(echo "$BOOK_BIKE" | jq '.serviceType = "WHEEL_ALIGNMENT"')" | jq -c '{status, code, detail}'
+       -d "$(echo "$BOOK_BIKE" | jq '.serviceTypes = ["WHEEL_ALIGNMENT"]')" | jq -c '{status, code, detail}'
 
-CAR_SLOT=$(first_free CAR AC_SERVICE)
-step "Book a car AC service for $CAR_SLOT"
+CAR_SLOT=$(first_free CAR AC_SERVICE,OIL_CHANGE)
+step "Book a car AC service + oil change (two services, one 2-hour slot) for $CAR_SLOT"
 post /appointments "$(jq -n --arg d "$DEALER" --arg p "$PHONE" --arg s "${DATE}T${CAR_SLOT}" '{
   dealerId: $d, customerName: "Asha Rao", customerPhone: $p, vehicleType: "CAR",
   vehicleNumber: "KA01 MJ 4321", vehicleMake: "Maruti Suzuki", vehicleModel: "Baleno",
-  serviceType: "AC_SERVICE", slotStart: $s }')" | jq -c '{id, vehicleType, serviceType, bayId, localStart, localEnd}'
+  serviceTypes: ["AC_SERVICE", "OIL_CHANGE"], slotStart: $s }')" | jq -c '{id, vehicleType, serviceTypes, bayId, localStart, localEnd}'
 
 step "Check the bike in -> appointment-service emits AppointmentCheckedIn -> repair order opens"
 post "/appointments/$APPT/check-in" '{"odometerKm": 18500}' | jq -c '{id, status}'
 RO=$(wait_for "/repair-orders?dealerId=$DEALER" "any(.[]; .appointmentId == \"$APPT\")" \
   | jq -r ".[] | select(.appointmentId == \"$APPT\") | .id")
-curl -fsS "$API/repair-orders/$RO" | jq -c '{roNumber, status, vehicleType, serviceType, labourAmount}'
+curl -fsS "$API/repair-orders/$RO" | jq -c '{roNumber, status, vehicleType, serviceTypes, labourAmount}'
 
 step "Assign a technician"
 post "/repair-orders/$RO/assign" '{"technician": "Ravi K"}' | jq -c '{roNumber, status, technician}'

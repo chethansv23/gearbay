@@ -16,7 +16,7 @@ describe('api client', () => {
 
     const result = await api.book({
       dealerId: 'GB-BLR-IND', customerName: 'Test Rider', customerPhone: '9845011111', vehicleType: 'BIKE',
-      vehicleNumber: 'KA05TR4242', serviceType: 'GENERAL_SERVICE', slotStart: '2030-01-07T10:00',
+      vehicleNumber: 'KA05TR4242', serviceTypes: ['GENERAL_SERVICE'], slotStart: '2030-01-07T10:00',
     }, 'key-123');
 
     expect(result.id).toBe(appointment.id);
@@ -54,12 +54,12 @@ describe('api client', () => {
   it('builds query strings for availability and parts', async () => {
     const fetchMock = mockFetch(200, []);
 
-    await api.availability('GB-BLR-WHF', 'CAR', 'AC_SERVICE', '2030-01-07');
+    await api.availability('GB-BLR-WHF', 'CAR', ['AC_SERVICE', 'OIL_CHANGE'], '2030-01-07');
     await api.parts('GB-BLR-WHF', 'BIKE');
     await api.parts('GB-BLR-WHF');
 
     expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
-      '/api/appointments/availability?dealerId=GB-BLR-WHF&vehicleType=CAR&serviceType=AC_SERVICE&date=2030-01-07',
+      '/api/appointments/availability?dealerId=GB-BLR-WHF&vehicleType=CAR&serviceTypes=AC_SERVICE,OIL_CHANGE&date=2030-01-07',
       '/api/parts?dealerId=GB-BLR-WHF&fitment=BIKE',
       '/api/parts?dealerId=GB-BLR-WHF',
     ]);
