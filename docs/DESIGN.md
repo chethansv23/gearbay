@@ -43,6 +43,12 @@ makes overlapping bookings on one bay impossible. Each booking attempt runs in i
 constraint (found under load in Torqline). The service tries bays that look free first and maps `23P01` to "try the
 next bay". See `services/appointment/src/appointmentService.js`.
 
+**Several services per booking.** A booking stores `service_types` (an array, 1-5 services). They run back to
+back on one bay, so availability and the exclusion constraint use the summed duration; the repair order charges
+labour per service (`labourLines`). The API accepts `serviceTypes` and still accepts a single `serviceType` from
+older clients; availability takes `?serviceTypes=A,B`. Migration `003_multiple_services.sql` converts existing
+single-service bookings.
+
 **Transactional outbox.** `appendOutbox(client, …)` writes the event with the *same pg client* as the state change,
 so both commit or neither does. `startOutboxRelay` polls with `FOR UPDATE SKIP LOCKED`, sends a batch with
 `acks: -1`, then marks rows published. See `packages/common/src/outbox.js`.

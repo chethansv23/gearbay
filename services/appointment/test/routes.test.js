@@ -6,7 +6,7 @@ import { silentLogger } from '../../../test/support/postgres.js';
 
 const VALID = {
   dealerId: 'GB-BLR-IND', customerName: 'Asha', customerPhone: '9845000001', vehicleType: 'BIKE',
-  vehicleNumber: 'KA03HB1234', serviceType: 'OIL_CHANGE', slotStart: '2030-01-07T10:00',
+  vehicleNumber: 'KA03HB1234', serviceTypes: ['OIL_CHANGE', 'TYRE_REPLACEMENT'], slotStart: '2030-01-07T10:00',
 };
 
 /** HTTP contract of the booking API, with the service stubbed out. */
@@ -52,6 +52,37 @@ describe('appointment routes', () => {
     expect(res.body.code).toBe('VALIDATION_FAILED');
     expect(res.body.errors.customerPhone).toMatch(/10-15 digits/);
     expect(service.book).not.toHaveBeenCalled();
+  });
+
+  it('passes several services through, without repeats', async () => {
+    service.book.mockResolvedValue({ appointment: { id: 'a-1' }, replayed: false });
+    await request(app).post('/api/appointments').send({ ...VALID, serviceTypes: ['OIL_CHANGE', 'BRAKE_SERVICE', 'OIL_CHANGE'] });
+    expect(service.book.mock.calls[0][0].serviceTypes).toEqual(['OIL_CHANGE', 'BRAKE_SERVICE']);
+  });
+
+  it('still accepts a single serviceType from older clients', async () => {
+    service.book.mockResolvedValue({ appointment: { id: 'a-1' }, replayed: false });
+    const { serviceTypes, ...legacy } = VALID;
+    await request(app).post('/api/appointments').send({ ...legacy, serviceType: 'OIL_CHANGE' });
+    expect(service.book.mock.calls[0][0].serviceTypes).toEqual(['OIL_CHANGE']);
+  });
+
+  it('requires at least one and at most five services', async () => {
+    const none = await request(app).post('/api/appointments').send({ ...VALID, serviceTypes: [] });
+    expect(none.status).toBe(400);
+    expect(none.body.errors.serviceTypes).toBe('choose at least one service');
+
+    const six = ['GENERAL_SERVICE', 'OIL_CHANGE', 'BRAKE_SERVICE', 'TYRE_REPLACEMENT', 'CLUTCH_OVERHAUL', 'CHAIN_SPROCKET'];
+    const tooMany = await request(app).post('/api/appointments').send({ ...VALID, serviceTypes: six });
+    expect(tooMany.body.errors.serviceTypes).toBe('choose at most 5 services');
+    expect(service.book).not.toHaveBeenCalled();
+  });
+
+  it('reads comma-separated services from the availability query', async () => {
+    service.availability = vi.fn().mockResolvedValue({ slots: [] });
+    await request(app).get('/api/appointments/availability')
+      .query({ dealerId: 'GB-BLR-IND', vehicleType: 'BIKE', serviceTypes: 'GENERAL_SERVICE,BRAKE_SERVICE', date: '2030-01-07' });
+    expect(service.availability).toHaveBeenCalledWith(expect.objectContaining({ serviceTypes: ['GENERAL_SERVICE', 'BRAKE_SERVICE'] }));
   });
 
   it('requires a reason to cancel', async () => {

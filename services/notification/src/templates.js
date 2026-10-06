@@ -3,11 +3,12 @@ import { DISPLAY_ZONE, MESSAGE_DATE_TIME_FORMAT } from './constants/index.js';
 
 const when = (instant) => DateTime.fromISO(instant, { zone: DISPLAY_ZONE }).toFormat(MESSAGE_DATE_TIME_FORMAT, { locale: 'en-US' });
 const human = (code) => code.replaceAll('_', ' ').toLowerCase();
+const humanList = (codes) => codes.map(human).join(' + ');
 const shortRef = (id) => id.slice(0, 8).toUpperCase();
 
 /** Customer-facing copy. */
 export const templates = {
-  booked: (e) => `Hi ${e.customerName}, your ${e.vehicleType.toLowerCase()} ${e.vehicleNumber} for ${human(e.serviceType)} `
+  booked: (e) => `Hi ${e.customerName}, your ${e.vehicleType.toLowerCase()} ${e.vehicleNumber} for ${humanList(e.serviceTypes)} `
     + `is confirmed for ${when(e.slotStart)}. Ref ${shortRef(e.appointmentId)}.`,
   cancelled: (e) => `Hi ${e.customerName}, your service appointment on ${when(e.slotStart)} has been cancelled (${e.reason}).`,
   checkedIn: (e) => `Hi ${e.customerName}, we have received ${e.vehicleNumber}. We'll message you when the job card is open.`,

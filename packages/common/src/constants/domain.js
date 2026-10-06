@@ -18,3 +18,6 @@ export const SERVICE_TYPES = Object.freeze({
   AC_SERVICE: { description: 'Air-conditioning service', CAR: 90, BIKE: null },
   CHAIN_SPROCKET: { description: 'Chain and sprocket kit replacement', CAR: null, BIKE: 60 },
 });
+
+/** Most services a customer can combine into one booking (they run back to back on one bay). */
+export const MAX_SERVICES_PER_BOOKING = 5;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayLabel, humanize, isoDate, nextDays, rupees, time12, timeOf } from './format';
+import { dayLabel, duration, humanize, humanizeList, isoDate, nextDays, rupees, time12, timeOf } from './format';
 
 describe('format', () => {
   it('formats rupees in the Indian numbering system', () => {
@@ -12,6 +12,13 @@ describe('format', () => {
     expect(humanize('GENERAL_SERVICE')).toBe('General service');
     expect(humanize('AC_SERVICE')).toBe('AC service');
     expect(humanize('CHECKED_IN')).toBe('Checked in');
+  });
+
+  it('joins several services and formats total time', () => {
+    expect(humanizeList(['GENERAL_SERVICE', 'AC_SERVICE'])).toBe('General service + AC service');
+    expect(duration(150)).toBe('2 h 30 min');
+    expect(duration(60)).toBe('1 h');
+    expect(duration(30)).toBe('30 min');
   });
 
   it('converts 24-hour times to 12-hour', () => {

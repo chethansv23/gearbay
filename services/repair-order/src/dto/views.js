@@ -1,4 +1,4 @@
-import { toPaise, toRupees } from '@gearbay/common';
+import { labourLines, toPaise, toRupees } from '@gearbay/common';
 
 const rupees = (numeric) => toRupees(toPaise(numeric));
 
@@ -15,7 +15,9 @@ export function repairOrderView(o, lines) {
     vehicleNumber: o.vehicle_number,
     vehicleMake: o.vehicle_make,
     vehicleModel: o.vehicle_model,
-    serviceType: o.service_type,
+    serviceTypes: o.service_types,
+    labourLines: labourLines(o.service_types, o.vehicle_type)
+      .map((l) => ({ serviceType: l.serviceType, minutes: l.minutes, amount: toRupees(l.labourPaise) })),
     odometerKm: o.odometer_km,
     technician: o.technician,
     note: o.note,

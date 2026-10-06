@@ -36,6 +36,8 @@ Ports are offset from Torqline (3000 / 8080 / 5433 …) so both projects can run
 
 - **Cars and bikes:** separate car lifts and bike stands, job durations per vehicle (general service 120 min vs 60),
   vehicle-only jobs (wheel alignment, chain kit), labour at ₹800/h vs ₹400/h, parts by fitment
+- **Several services in one booking:** e.g. general service + brake service, done back to back in one slot on
+  one bay; the slot length is the sum of the services, and labour is charged per service on the invoice
 - **No double booking:** a Postgres exclusion constraint plus a per-bay advisory lock
 - **Idempotent booking:** `Idempotency-Key` header; a retry returns the original booking with 200
 - **Parts saga:** all-or-nothing reservation, consumption on completion, release on cancellation, low-stock alerts

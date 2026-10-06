@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError, type Appointment, type Availability, type Bay, type Dealer, type ServiceTypeInfo, type Slot, type VehicleType } from '../api';
 import { VehicleIcon } from '../components/Icons';
-import { API_ERROR_CODES, BOOKING_DAYS_AHEAD } from '../constants';
-import { dayLabel, humanize, isoDate, nextDays, time12, timeOf } from '../format';
+import { API_ERROR_CODES, BOOKING_DAYS_AHEAD, DEFAULT_SERVICE, MAX_SERVICES_PER_BOOKING } from '../constants';
+import { dayLabel, duration, humanize, humanizeList, isoDate, nextDays, time12, timeOf } from '../format';
 
 const emptyForm = { customerName: '', customerPhone: '', vehicleNumber: '', vehicleMake: '', vehicleModel: '', notes: '' };
 
 export function BookPage({ dealer }: { dealer: Dealer }) {
   const [vehicle, setVehicle] = useState<VehicleType>('BIKE');
   const [catalog, setCatalog] = useState<ServiceTypeInfo[]>([]);
-  const [service, setService] = useState('GENERAL_SERVICE');
+  // Several services can be combined; they are done back to back in one slot.
+  const [services, setServices] = useState<string[]>([DEFAULT_SERVICE]);
   const days = useMemo(() => nextDays(BOOKING_DAYS_AHEAD), []);
   const [date, setDate] = useState(isoDate(days[1]));
   const [availability, setAvailability] = useState<Availability | null>(null);
@@ -27,16 +28,31 @@ export function BookPage({ dealer }: { dealer: Dealer }) {
   useEffect(() => { api.bays(dealer.id).then(setBays); }, [dealer.id]);
 
   const offered = catalog.filter((s) => s.durationMinutes[vehicle] != null);
+  const isOffered = (code: string) => offered.some((s) => s.code === code);
+
+  // Switching vehicle drops services that don't apply to it (a car has no chain kit), keeping at least one.
   useEffect(() => {
-    if (offered.length && !offered.some((s) => s.code === service)) setService(offered[0].code);
+    if (!offered.length) return;
+    const kept = services.filter(isOffered);
+    if (kept.length !== services.length) setServices(kept.length ? kept : [offered[0].code]);
   }, [vehicle, catalog]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const servicesKey = services.join(',');
   useEffect(() => {
-    if (!offered.some((s) => s.code === service)) return;
+    if (!services.length || !services.every(isOffered)) return;
     setSlot(null);
     setAvailability(null);
-    api.availability(dealer.id, vehicle, service, date).then(setAvailability).catch((e) => setError(e.message));
-  }, [dealer.id, vehicle, service, date, catalog, reload]); // eslint-disable-line react-hooks/exhaustive-deps
+    api.availability(dealer.id, vehicle, services, date).then(setAvailability).catch((e) => setError(e.message));
+  }, [dealer.id, vehicle, servicesKey, date, catalog, reload]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Adds or removes a service. The last one can't be removed, and at most MAX_SERVICES_PER_BOOKING are allowed. */
+  function toggleService(code: string) {
+    setError(null);
+    setServices((current) => {
+      if (current.includes(code)) return current.length > 1 ? current.filter((c) => c !== code) : current;
+      return current.length < MAX_SERVICES_PER_BOOKING ? [...current, code] : current;
+    });
+  }
 
   const update = (field: keyof typeof emptyForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm({ ...form, [field]: e.target.value });
@@ -50,7 +66,7 @@ export function BookPage({ dealer }: { dealer: Dealer }) {
     setError(null);
     try {
       const appointment = await api.book({
-        dealerId: dealer.id, vehicleType: vehicle, serviceType: service, slotStart: `${date}T${slot.start.slice(0, 5)}`,
+        dealerId: dealer.id, vehicleType: vehicle, serviceTypes: services, slotStart: `${date}T${slot.start.slice(0, 5)}`,
         customerName: form.customerName, customerPhone: form.customerPhone.replace(/\s/g, ''),
         vehicleNumber: form.vehicleNumber, vehicleMake: form.vehicleMake || undefined,
         vehicleModel: form.vehicleModel || undefined, notes: form.notes || undefined,
@@ -91,7 +107,7 @@ export function BookPage({ dealer }: { dealer: Dealer }) {
             <dt>When</dt><dd>{new Date(booked.localStart).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}, {timeOf(booked.localStart)} to {timeOf(booked.localEnd)}</dd>
             <dt>Where</dt><dd>{dealer.name}, {bay?.name ?? `bay ${booked.bayId}`}</dd>
             <dt>Vehicle</dt><dd>{booked.vehicleNumber} {booked.vehicleMake && `· ${booked.vehicleMake} ${booked.vehicleModel ?? ''}`}</dd>
-            <dt>Service</dt><dd>{humanize(booked.serviceType)}</dd>
+            <dt>{booked.serviceTypes.length > 1 ? 'Services' : 'Service'}</dt><dd>{humanizeList(booked.serviceTypes)}</dd>
           </dl>
           <button className="btn primary" onClick={startOver}>Book another</button>
         </div>
@@ -99,7 +115,8 @@ export function BookPage({ dealer }: { dealer: Dealer }) {
     );
   }
 
-  const selectedService = catalog.find((s) => s.code === service);
+  const totalMinutes = services.reduce((sum, code) => sum + (offered.find((s) => s.code === code)?.durationMinutes[vehicle] ?? 0), 0);
+  const atLimit = services.length >= MAX_SERVICES_PER_BOOKING;
   const bayTotal = dealer.bayCount[vehicle] ?? 0;
 
   return (
@@ -119,16 +136,30 @@ export function BookPage({ dealer }: { dealer: Dealer }) {
         </div>
 
         <div className="card">
-          <h2 className="step"><span>2</span> Service</h2>
-          <div className="service-grid">
-            {offered.map((s) => (
-              <button key={s.code} className={`service-option ${service === s.code ? 'active' : ''}`} onClick={() => setService(s.code)}>
-                <strong>{humanize(s.code)}</strong>
-                <span className="muted small">{s.description}</span>
-                <span className="tag">{s.durationMinutes[vehicle]} min</span>
-              </button>
-            ))}
+          <div className="step-head">
+            <h2 className="step"><span>2</span> Services</h2>
+            <span className="muted small">
+              Choose one or more (at least one) · {services.length} selected · {duration(totalMinutes)} in total
+            </span>
           </div>
+          <div className="service-grid">
+            {offered.map((s) => {
+              const selected = services.includes(s.code);
+              return (
+                <button key={s.code} type="button" role="checkbox" aria-checked={selected}
+                        aria-label={`${humanize(s.code)}, ${s.durationMinutes[vehicle]} min`}
+                        className={`service-option ${selected ? 'active' : ''}`}
+                        disabled={!selected && atLimit}
+                        onClick={() => toggleService(s.code)}>
+                  <span className={`check ${selected ? 'on' : ''}`} aria-hidden>{selected ? '✓' : ''}</span>
+                  <strong>{humanize(s.code)}</strong>
+                  <span className="muted small">{s.description}</span>
+                  <span className="tag">{s.durationMinutes[vehicle]} min</span>
+                </button>
+              );
+            })}
+          </div>
+          {atLimit && <p className="muted small">You can combine up to {MAX_SERVICES_PER_BOOKING} services in one booking.</p>}
         </div>
 
         <div className="card">
@@ -177,7 +208,8 @@ export function BookPage({ dealer }: { dealer: Dealer }) {
           <div className="booking-summary">
             <VehicleIcon type={vehicle} size={22} />
             <div>
-              <strong>{selectedService ? humanize(selectedService.code) : '-'}</strong>
+              <strong>{humanizeList(services)}</strong>
+              <div className="muted small">{duration(totalMinutes)} on one {vehicle === 'CAR' ? 'lift' : 'stand'}</div>
               <div className="muted small">
                 {slot ? `${dayLabel(new Date(date + 'T00:00')).bottom}, ${time12(slot.start)} to ${time12(slot.end)}` : 'Pick a time slot'}
               </div>

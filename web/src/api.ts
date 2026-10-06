@@ -51,7 +51,7 @@ export interface Appointment {
   vehicleNumber: string;
   vehicleMake?: string;
   vehicleModel?: string;
-  serviceType: string;
+  serviceTypes: string[];
   localStart: string;
   localEnd: string;
   notes?: string;
@@ -67,7 +67,7 @@ export interface BookingRequest {
   vehicleNumber: string;
   vehicleMake?: string;
   vehicleModel?: string;
-  serviceType: string;
+  serviceTypes: string[];
   slotStart: string;
   notes?: string;
 }
@@ -94,17 +94,25 @@ export interface RepairOrder {
   vehicleNumber: string;
   vehicleMake?: string;
   vehicleModel?: string;
-  serviceType: string;
+  serviceTypes: string[];
   odometerKm?: number;
   technician?: string;
   note?: string;
   parts: PartLine[];
+  /** One line per booked service; labourAmount is their sum. */
+  labourLines: LabourLine[];
   labourAmount: number;
   partsAmount?: number;
   taxAmount?: number;
   totalAmount?: number;
   openedAt: string;
   closedAt?: string;
+}
+
+export interface LabourLine {
+  serviceType: string;
+  minutes: number;
+  amount: number;
 }
 
 export interface Part {
@@ -157,9 +165,9 @@ export const api = {
   dealers: () => request<Dealer[]>('/dealers'),
   bays: (dealerId: string) => request<Bay[]>(`/dealers/${dealerId}/bays`),
   serviceTypes: () => request<ServiceTypeInfo[]>('/dealers/service-types'),
-  availability: (dealerId: string, vehicleType: VehicleType, serviceType: string, date: string) =>
+  availability: (dealerId: string, vehicleType: VehicleType, serviceTypes: string[], date: string) =>
     request<Availability>(
-      `/appointments/availability?dealerId=${dealerId}&vehicleType=${vehicleType}&serviceType=${serviceType}&date=${date}`),
+      `/appointments/availability?dealerId=${dealerId}&vehicleType=${vehicleType}&serviceTypes=${serviceTypes.join(',')}&date=${date}`),
   book: (body: BookingRequest, idempotencyKey: string) => post<Appointment>('/appointments', body, idempotencyKey),
   appointments: (dealerId: string, date: string) => request<Appointment[]>(`/appointments?dealerId=${dealerId}&date=${date}`),
   checkIn: (id: string, odometerKm?: number) => post<Appointment>(`/appointments/${id}/check-in`, { odometerKm }),

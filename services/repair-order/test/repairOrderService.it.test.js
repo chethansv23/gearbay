@@ -18,11 +18,11 @@ describe('repair orders against Postgres', () => {
   const lastEvent = async (id) => (await db.pool.query(
     "select event_type, payload from outbox_event where aggregate_id = $1 order by created_at desc limit 1", [id])).rows[0];
 
-  async function openCarJob() {
+  async function openCarJob(serviceTypes = ['WHEEL_ALIGNMENT']) {
     const appointmentId = randomUUID();
     await withTransaction(db.pool, (client) => service.openFromCheckIn(client, {
       appointmentId, dealerId: 'GB-BLR-WHF', customerName: 'Asha', customerPhone: '9845000001', vehicleType: 'CAR',
-      vehicleNumber: 'KA01MJ4321', vehicleMake: 'Hyundai', vehicleModel: 'Creta', serviceType: 'WHEEL_ALIGNMENT', odometerKm: 42000,
+      vehicleNumber: 'KA01MJ4321', vehicleMake: 'Hyundai', vehicleModel: 'Creta', serviceTypes, odometerKm: 42000,
     }));
     const { rows } = await db.pool.query('select id from repair_order where appointment_id = $1', [appointmentId]);
     return { id: rows[0].id, appointmentId };
@@ -38,6 +38,21 @@ describe('repair orders against Postgres', () => {
     await withTransaction(db.pool, (client) => service.openFromCheckIn(client, { appointmentId }));
     const { rows } = await db.pool.query('select count(*)::int as n from repair_order where appointment_id = $1', [appointmentId]);
     expect(rows[0].n).toBe(1);
+  });
+
+  it('charges labour for each service on a combined job card', async () => {
+    const { id } = await openCarJob(['WHEEL_ALIGNMENT', 'AC_SERVICE']);
+    const order = await service.get(id);
+
+    expect(order.serviceTypes).toEqual(['WHEEL_ALIGNMENT', 'AC_SERVICE']);
+    expect(order.labourLines).toEqual([
+      { serviceType: 'WHEEL_ALIGNMENT', minutes: 60, amount: 800 },
+      { serviceType: 'AC_SERVICE', minutes: 90, amount: 1200 },
+    ]);
+    expect(order.labourAmount).toBe(2000);
+
+    await service.assign(id, 'Ravi K');
+    expect((await service.complete(id)).totalAmount).toBe(2360); // 2,000 + 18% GST
   });
 
   it('runs the parts saga to an invoice with GST', async () => {

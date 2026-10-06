@@ -21,9 +21,9 @@ describe('booking against Postgres', () => {
 
   const slot = (days, hour) => DateTime.now().setZone('Asia/Kolkata').plus({ days })
     .set({ hour, minute: 0, second: 0, millisecond: 0 }).toFormat("yyyy-MM-dd'T'HH:mm");
-  const bike = (dealerId, slotStart, i, serviceType = 'GENERAL_SERVICE') => ({
+  const bike = (dealerId, slotStart, i, services = 'GENERAL_SERVICE') => ({
     dealerId, customerName: `Rider ${i}`, customerPhone: `98450${String(i).padStart(5, '0')}`,
-    vehicleType: 'BIKE', vehicleNumber: `KA53EZ${i}`, serviceType, slotStart,
+    vehicleType: 'BIKE', vehicleNumber: `KA53EZ${i}`, serviceTypes: [services].flat(), slotStart,
   });
 
   async function race(dealerId, slotStart, customers, serviceType) {
@@ -73,6 +73,31 @@ describe('booking against Postgres', () => {
       .rejects.toMatchObject({ code: 'SERVICE_NOT_OFFERED' });
   });
 
+  it('books several services back to back as one longer slot on one bay', async () => {
+    const at = slot(14, 10);
+    const combined = await service.book(bike('GB-BLR-IND', at, 1, ['GENERAL_SERVICE', 'BRAKE_SERVICE']));
+
+    expect(combined.appointment.serviceTypes).toEqual(['GENERAL_SERVICE', 'BRAKE_SERVICE']);
+    expect(combined.appointment.localEnd.slice(11, 16)).toBe('12:00'); // 60 + 60 minutes from 10:00
+
+    // The bay stays busy for the whole two hours: an 11:00 booking must use the other stand.
+    const later = await service.book(bike('GB-BLR-IND', at.replace('T10:00', 'T11:00'), 2, 'OIL_CHANGE'));
+    expect(later.appointment.bayId).not.toBe(combined.appointment.bayId);
+    const { rows } = await db.pool.query('select payload from outbox_event where aggregate_id = $1', [combined.appointment.id]);
+    expect(rows[0].payload.serviceTypes).toEqual(['GENERAL_SERVICE', 'BRAKE_SERVICE']);
+  });
+
+  it('names every selected service that does not fit the vehicle', async () => {
+    await expect(service.book(bike('GB-BLR-IND', slot(15, 10), 1, ['GENERAL_SERVICE', 'WHEEL_ALIGNMENT', 'AC_SERVICE'])))
+      .rejects.toMatchObject({ code: 'SERVICE_NOT_OFFERED', message: 'WHEEL_ALIGNMENT, AC_SERVICE are not offered for a BIKE' });
+  });
+
+  it('refuses a combination that would run past closing time', async () => {
+    // Bike clutch overhaul + general service = 150 minutes; from 16:00 that ends at 18:30, after the 18:00 close.
+    await expect(service.book(bike('GB-BLR-IND', slot(16, 16), 1, ['CLUTCH_OVERHAUL', 'GENERAL_SERVICE'])))
+      .rejects.toMatchObject({ code: 'OUTSIDE_HOURS' });
+  });
+
   it('validates the grid and opening hours', async () => {
     await expect(service.book(bike('GB-BLR-IND', slot(12, 10).replace(':00', ':15'), 1)))
       .rejects.toMatchObject({ code: 'OFF_GRID' });
@@ -82,8 +107,12 @@ describe('booking against Postgres', () => {
 
   it('reports availability per vehicle type', async () => {
     const date = slot(13, 9).slice(0, 10);
-    const availability = await service.availability({ dealerId: 'GB-BLR-IND', vehicleType: 'CAR', serviceType: 'AC_SERVICE', date });
+    const availability = await service.availability({ dealerId: 'GB-BLR-IND', vehicleType: 'CAR', serviceTypes: ['AC_SERVICE'], date });
     expect(availability.durationMinutes).toBe(90);
     expect(availability.slots[0]).toEqual({ start: '09:00:00', end: '10:30:00', freeBays: 3 });
+
+    const combined = await service.availability({ dealerId: 'GB-BLR-IND', vehicleType: 'CAR', serviceTypes: ['AC_SERVICE', 'OIL_CHANGE'], date });
+    expect(combined.durationMinutes).toBe(120);
+    expect(combined.slots.at(-1)).toMatchObject({ start: '16:00:00', end: '18:00:00' });
   });
 });

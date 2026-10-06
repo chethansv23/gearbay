@@ -1,6 +1,6 @@
 import type { Dealer, RepairOrder } from '../api';
 import { GST_LABEL } from '../constants';
-import { humanize, rupees } from '../format';
+import { duration, humanize, rupees } from '../format';
 
 /** The invoice body, shared by the preview dialog and the printable invoice page. */
 export function InvoiceView({ order, dealer }: { order: RepairOrder; dealer?: Dealer }) {
@@ -26,10 +26,13 @@ export function InvoiceView({ order, dealer }: { order: RepairOrder; dealer?: De
       <table className="table invoice-table">
         <thead><tr><th>Item</th><th className="right">Qty</th><th className="right">Rate</th><th className="right">Amount</th></tr></thead>
         <tbody>
-          <tr>
-            <td>Labour: {humanize(order.serviceType)}</td><td className="right">1</td>
-            <td className="right">{rupees(order.labourAmount)}</td><td className="right">{rupees(order.labourAmount)}</td>
-          </tr>
+          {order.labourLines.map((line) => (
+            <tr key={line.serviceType}>
+              <td>Labour: {humanize(line.serviceType)} <span className="muted small">({duration(line.minutes)})</span></td>
+              <td className="right">1</td>
+              <td className="right">{rupees(line.amount)}</td><td className="right">{rupees(line.amount)}</td>
+            </tr>
+          ))}
           {reserved.map((p) => (
             <tr key={p.sku}>
               <td>{p.name ?? p.sku}</td><td className="right">{p.quantity}</td>
