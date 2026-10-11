@@ -7,10 +7,6 @@ Node.js 22 · Express 5 · PostgreSQL · Kafka · Redis · React · TypeScript �
 A customer books a slot for their **car or bike**, the workshop checks the vehicle in, a job card opens
 automatically, parts are reserved from stock, and the customer gets SMS updates and an itemised GST invoice.
 
-Gearbay is the JavaScript implementation of [Torqline](https://github.com/chethansv23/torqline) (Java / Spring Boot).
-Both share the same architecture, database schema, Kafka events and REST API, so the same UI, demo script and load
-test run against either. See [Java → Node mapping](docs/DESIGN.md#java-torqline--node-gearbay).
-
 ## Quick start
 
 **You need:** Docker Desktop (6 GB+ memory). Node isn't needed to run it.
@@ -26,7 +22,7 @@ make demo      # scripted end-to-end walkthrough
 | http://localhost:9080/api | REST API through the gateway |
 | `localhost:5434` | PostgreSQL, user and password `gearbay` (databases `appointment_db`, `repair_order_db`, `inventory_db`, `notification_db`) |
 
-Ports are offset from Torqline (3000 / 8080 / 5433 …) so both projects can run at the same time.
+Ports are offset from the usual defaults (3000 / 8080 / 5432 …) so Gearbay can run alongside other local projects.
 
 **Run services locally with hot reload:** `make infra`, then `npm install` and
 `node --watch services/appointment/src/index.js` (and the others). For the UI: `cd web && npm run dev`
@@ -51,7 +47,7 @@ Ports are offset from Torqline (3000 / 8080 / 5433 …) so both projects can run
 | 50 riders racing for 2 bike stands (Testcontainers) | exactly 2 booked |
 | 50 riders racing for 4 bike stands (Testcontainers and k6) | exactly 4 booked, 46 clean 409s, 0 errors |
 | Availability reads at 200 req/s (k6) | p95 ≈ 1.9 ms |
-| End-to-end demo invoice | ₹1,675.60, identical to Torqline |
+| End-to-end demo invoice (`make demo`) | ₹1,675.60 |
 
 ## Tests
 
@@ -74,7 +70,7 @@ services/
   notification/      SMS and email from events
 web/                 React + TypeScript UI
 test/support/        Testcontainers helper
-docs/DESIGN.md       architecture, mechanisms, Node choices, Java → Node mapping
+docs/DESIGN.md       architecture, mechanisms, Node choices, background
 ```
 
 Each service follows the same layout: `src/constants/`, `src/dto/` (zod schemas and response views),
