@@ -1,8 +1,6 @@
 # Gearbay design
 
-Gearbay is the Node.js implementation of the same system as [Torqline](https://github.com/chethansv23/torqline)
-(Java / Spring Boot). The architecture, database schema, events and REST API are identical, so the same web UI,
-demo script and load test run against either. This document covers the design and the Node-specific choices.
+This document covers Gearbay's architecture, the mechanisms behind its guarantees, and the Node-specific choices.
 
 ## Architecture
 
@@ -40,7 +38,7 @@ flowchart LR
 `EXCLUDE USING gist (bay_id WITH =, tstzrange(slot_start, slot_end) WITH &&) WHERE status <> 'CANCELLED'`
 makes overlapping bookings on one bay impossible. Each booking attempt runs in its own transaction that first takes
 `pg_advisory_xact_lock(7001, bayId)`: without it, concurrent conflicting inserts deadlock while checking the
-constraint (found under load in Torqline). The service tries bays that look free first and maps `23P01` to "try the
+constraint (found under load). The service tries bays that look free first and maps `23P01` to "try the
 next bay". See `services/appointment/src/appointmentService.js`.
 
 **Several services per booking.** A booking stores `service_types` (an array, 1-5 services). They run back to
@@ -102,10 +100,13 @@ services/<name>
   src/index.js      wiring: migrate, Kafka, relay, consumers, HTTP server
   migrations/       numbered SQL files
   test/             *.test.js (unit) and *.it.test.js (Testcontainers)
-web/                React + TypeScript UI (same as Torqline, rebranded)
+web/                React + TypeScript UI
 ```
 
-## Java (Torqline) → Node (Gearbay)
+## Background: the Java version
+
+A Java / Spring Boot version of the same system also exists: [Torqline](https://github.com/chethansv23/torqline). It
+shares Gearbay's database schema, Kafka events and REST API. The table maps its Spring pieces to their Node equivalents.
 
 | Torqline (Spring Boot) | Gearbay (Node.js) |
 |---|---|

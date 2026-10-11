@@ -1,4 +1,4 @@
-# Ports are offset from Torqline (the Java version) so both stacks can run side by side.
+# Ports are offset from the usual defaults so Gearbay can run alongside other local stacks.
 name: gearbay
 
 x-service: &service
